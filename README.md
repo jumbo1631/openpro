@@ -47,6 +47,7 @@ OpenPro is an **alternative to the official GoPro Quik app** for getting media o
   - [Camera Link (VPN users only)](#camera-link-vpn-users-only)
 - [About the app](#about-the-app)
 - [Contribution \& Development](#contribution--development)
+- [License](#license)
 
 ## Features
 
@@ -243,3 +244,9 @@ Elsewhere in the repo:
 - `app/src/main/java/com/gopro/quikengine/`: the JNI shim the GoPro engine binds to (keep its names unchanged)
 - `shared/`: camera Wi-Fi join and the Camera Link protocol, compiled into both apps
 - `link/`: Camera Link
+
+## License
+
+OpenPro and Camera Link are free software, released under the [GNU General Public License v3.0](LICENSE): you can use, study, share and change them, and anything you distribute that's built from them must be under the same license, with its source available.
+
+GoPro's stabilization engine is not part of OpenPro and isn't covered by this license: it's GoPro's own code, which each user adds from their own copy of GoPro Quik. OpenPro is not made or endorsed by GoPro.
