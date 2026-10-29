@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="216" height="216" viewBox="18 18 72 72">
+  <!-- OpenPro's launcher icon (app/src/main/res/drawable/ic_launcher_foreground.xml) in a round mask. -->
+  <circle cx="54" cy="54" r="36" fill="#FFFFFF"/>
+  <g transform="translate(54 53) scale(0.88) translate(-54 -53)">
+  <rect x="34" y="30" width="13" height="6" rx="2" fill="#00A3E0"/>
+  <rect x="26" y="34" width="56" height="42" rx="7" fill="#1A1A1A"/>
+  <rect x="30.5" y="41" width="27" height="27" rx="5.5" fill="#2C2C2C"/>
+  <rect x="61.5" y="44" width="16" height="16" rx="2.5" fill="#2B3540"/>
+  <circle cx="75" cy="39" r="1.3" fill="#E53935"/>
+  <circle cx="44" cy="54.5" r="9.5" fill="#00A3E0"/>
+  <circle cx="44" cy="54.5" r="7.3" fill="#0B1620"/>
+  <circle cx="44" cy="54.5" r="3.2" fill="#1E3A4C"/>
+  <circle cx="41" cy="51.5" r="1.7" fill="#FFFFFF"/>
+  </g>
+</svg>

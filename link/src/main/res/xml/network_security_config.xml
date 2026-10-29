@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- The camera serves plain HTTP on its own access point. -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">10.5.5.9</domain>
+    </domain-config>
+</network-security-config>

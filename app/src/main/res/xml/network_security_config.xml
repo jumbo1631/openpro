@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Your own server: HTTPS normally, but plain HTTP is allowed for servers on your LAN or VPN
+         (OpenPro warns when a server is set up without HTTPS). CAs you installed yourself are
+         trusted too, and a self-signed certificate can be pinned in server setup. -->
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

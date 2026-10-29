@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <!-- adb-triggered engine test; debug builds only. -->
+        <receiver
+            android:name=".DebugEngineReceiver"
+            android:exported="true" />
+        <!-- adb-triggered live-preview replay; debug builds only. -->
+        <receiver
+            android:name=".DebugPreviewReceiver"
+            android:exported="true" />
+    </application>
+</manifest>

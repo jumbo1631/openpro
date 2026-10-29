@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- OpenPro's blue, behind Camera Link's launcher icon. -->
+    <color name="ic_launcher_background">#FF00A3E0</color>
+</resources>

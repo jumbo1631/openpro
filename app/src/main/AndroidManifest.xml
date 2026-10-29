@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Camera control link -->
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation"
+        tools:targetApi="s" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <!-- Camera access point for media (local network only; OpenPro never contacts GoPro's cloud) -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+    <!-- Long downloads and renders -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- Stabilizing (Android 15+): the proper type for renders, with its own daily allowance. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROCESSING" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Resume unfinished batch jobs after a reboot -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- Camera Link (com.openpro.link): reaches the camera while a VPN covers OpenPro.
+         Defined identically in both apps, so whichever is installed first defines it. -->
+    <permission
+        android:name="com.openpro.permission.CAMERA_LINK"
+        android:protectionLevel="signature" />
+    <uses-permission android:name="com.openpro.permission.CAMERA_LINK" />
+
+    <queries>
+        <package android:name="com.openpro.link" />
+        <!-- The Nextcloud app (and its beta), for signing in with its account. -->
+        <package android:name="com.nextcloud.client" />
+        <package android:name="com.nextcloud.android.beta" />
+        <!-- GoPro Quik, to take its stabilization engine when the right version is installed. -->
+        <package android:name="com.gopro.smarty" />
+    </queries>
+
+    <uses-feature android:name="android.hardware.bluetooth_le" android:required="true" />
+
+    <application
+        android:name=".OpenProApp"
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:largeHeap="true"
+        android:networkSecurityConfig="@xml/network_security_config"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.OpenPro">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:windowSoftInputMode="adjustResize"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <service
+            android:name=".TransferService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+        <!-- Batch queue: WorkManager's foreground service needs the matching type. -->
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync|mediaProcessing"
+            tools:node="merge" />
+
+        <receiver
+            android:name=".batch.BatchBootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- GoPro's engine runs isolated in its own process. -->
+        <service
+            android:name=".quik.QuikService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync|mediaProcessing"
+            android:process=":quik" />
+    </application>
+</manifest>

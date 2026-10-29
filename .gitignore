@@ -1,0 +1,34 @@
+.gradle/
+build/
+local.properties
+# Release signing: the key's location and passwords, and any key.
+keystore.properties
+*.jks
+*.keystore
+.idea/
+*.iml
+.kotlin/
+
+# Any APK or app bundle (GoPro Quik goes in the project root; builds are copied around too)
+*.apk
+*.apkm
+*.xapk
+*.apks
+*.aab
+*.apkm_FILES/
+*.xapk_FILES/
+
+# Local tooling config
+.claude/
+.mcp.json
+.vscode/
+
+# GoPro's proprietary engine. OpenPro copies it out of Quik on the phone, so it should never be in
+# the source tree; these are where earlier versions of OpenPro put it. Never commit or redistribute.
+app/src/full/
+app/src/main/jniLibs/
+app/src/main/assets/qe_bundle/
+app/src/main/assets/openpro_engine.json
+
+# Stock media for the showcase branch (never committed)
+app/showcase-assets/
