@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/icon.svg" width="140" alt="OpenPro icon">
+  <img src="assets/icon-square.svg" width="140" alt="OpenPro icon">
 </p>
 
 <h1 align="center">OpenPro</h1>
@@ -7,13 +7,7 @@
 <h3 align="center">An unofficial GoPro companion app for Android</h3>
 
 <p align="center">
-  <img src="assets/screenshots/home.png" width="200" alt="Home screen">
-  <img src="assets/screenshots/clip.png" width="200" alt="A clip's page">
-  <img src="assets/screenshots/gallery.png" width="200" alt="Media gallery">
-  <br>
-  <img src="assets/screenshots/batch.png" width="200" alt="Batch downloads and uploads">
-  <img src="assets/screenshots/remote.png" width="200" alt="Remote control and live preview">
-  <img src="assets/screenshots/stats.png" width="200" alt="Stats: how safe your media is">
+  <img src="assets/screenshots/overview.png" width="600" alt="OpenPro's screens: home, a clip's page, the media gallery, batch downloads and uploads, remote control with live preview, and stats on how safe your media is">
 </p>
 
 <p align="center"><i>Great hardware deserves great software. OpenPro is an open source companion app for GoPro cameras that does what you need, runs smoothly, and respects you as a user.</i></p>
