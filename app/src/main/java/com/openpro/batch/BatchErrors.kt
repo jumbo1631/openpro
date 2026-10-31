@@ -47,6 +47,11 @@ object BatchErrors {
         else -> Outcome.Fail
     }
 
+    /** The other end couldn't be reached at all (as opposed to failing partway, or answering with an error). */
+    fun isUnreachable(t: Throwable) = generateSequence(t) { it.cause }.any {
+        it is SocketTimeoutException || it is ConnectException || it is NoRouteToHostException || it is UnknownHostException
+    }
+
     private fun Throwable.isNoSpace() =
         generateSequence(this) { it.cause }.any { "ENOSPC" in (it.message ?: "") || "No space left" in (it.message ?: "") }
 

@@ -230,10 +230,25 @@ class BatchRunner(private val app: OpenProApp) {
     private val internetThisPass = mutableMapOf<String?, String>()
 
     /**
+     * Set when a server couldn't be reached while the phone was on the camera's Wi-Fi, though Android
+     * reported internet there (mobile data or a VPN that doesn't reach it). Until the phone leaves
+     * the camera, uploads wait for the internet instead of each timing out first.
+     */
+    @Volatile private var noInternetOnCamera = false
+
+    /**
      * Internet uploads can use right now: any, within the mobile data setting. Whether a server is
      * reachable over it (a VPN, the right Wi-Fi) is the user's to arrange; the upload finds out.
      */
-    private fun internetNow(net: Internet = app.net.internet.value): Boolean = net.usable(config.uploadsOverMobileData)
+    private fun internetNow(net: Internet = app.net.internet.value): Boolean {
+        val onCamera = app.camera.state.value is CameraState.Online
+        if (!onCamera) noInternetOnCamera = false
+        return net.usable(config.uploadsOverMobileData) && !(onCamera && noInternetOnCamera)
+    }
+
+    /** Why a job that finished a step waits for its next one, which needs another network. */
+    private fun nextNetworkReason(job: JobEntity): String =
+        if (needsInternet(job)) "Waiting for internet" else "Waiting for the camera"
 
     private suspend fun ensureInternet(job: JobEntity): String? {
         if (internetNow()) return null
@@ -367,7 +382,8 @@ class BatchRunner(private val app: OpenProApp) {
             }
             if (finished.step != Step.Finished) {
                 // The next step needs another network; the scheduler switches or waits for it.
-                repo.saveIfRunning(finished.copy(state = JobState.Queued), "Next: ${finished.step.name.lowercase()}, on another network")
+                val reason = nextNetworkReason(finished)
+                repo.saveIfRunning(finished.copy(state = JobState.Waiting, waitingReason = reason), "Next: ${finished.step.name.lowercase()}. $reason")
             } else if (repo.saveIfRunning(finished.copy(state = JobState.Done, error = null, finishedAt = System.currentTimeMillis()), "Done: ${finished.resultLocation ?: ""}")) {
                 Log.i(TAG, "job ${job.id} done")
             }
@@ -392,6 +408,13 @@ class BatchRunner(private val app: OpenProApp) {
             when (BatchErrors.classify(t)) {
                 Outcome.Wait -> repo.save(job.copy(state = JobState.Waiting, waitingReason = message), "Waiting: $message")
                 Outcome.Fail -> repo.save(job.copy(state = JobState.Failed, error = message, finishedAt = System.currentTimeMillis()), "Failed: $message")
+                // A server out of reach from the camera's Wi-Fi: the internet Android reported there
+                // isn't real for it. Wait for the phone to leave the camera, without using an attempt.
+                Outcome.Retry if needsInternet(job) && app.camera.state.value is CameraState.Online && BatchErrors.isUnreachable(t) -> {
+                    noInternetOnCamera = true
+                    val reason = nextNetworkReason(job)
+                    repo.save(job.copy(state = JobState.Waiting, waitingReason = reason), "Couldn't reach the server over the camera's Wi-Fi ($message). $reason")
+                }
                 Outcome.Retry -> lostConnection(job)?.let { reason ->
                     repo.save(job.copy(state = JobState.Waiting, waitingReason = reason), "Interrupted: $message. $reason")
                 } ?: run {
