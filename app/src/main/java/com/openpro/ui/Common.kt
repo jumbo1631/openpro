@@ -18,6 +18,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.material.icons.filled.Public
@@ -86,9 +87,16 @@ fun HoldCameraWhileVisible(vm: AppViewModel) {
 @Composable
 fun BatchButton(vm: AppViewModel, onClick: () -> Unit) {
     val active by vm.activeJobCount.collectAsState()
-    IconButton(onClick = onClick) {
-        androidx.compose.material3.BadgedBox(badge = { if (active > 0) androidx.compose.material3.Badge { Text("$active") } }) {
+    // The badge sits on top of the button, not inside it: the button clips its content to its circle.
+    androidx.compose.foundation.layout.Box {
+        IconButton(onClick = onClick) {
             Icon(androidx.compose.material.icons.Icons.Filled.SwapVert, "Batch")
+        }
+        if (active > 0) {
+            androidx.compose.material3.Badge(
+                androidx.compose.ui.Modifier.align(androidx.compose.ui.Alignment.TopEnd)
+                    .offset(x = (-4).dp, y = 4.dp),
+            ) { Text("$active") }
         }
     }
 }
