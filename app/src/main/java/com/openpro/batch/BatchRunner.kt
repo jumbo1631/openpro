@@ -742,18 +742,23 @@ class BatchRunner(private val app: OpenProApp) {
     /** Throttled progress reporting: live UI every update, the database about once a second. */
     internal inner class Meter(private val jobId: String, private val label: String, private val toInternet: Boolean = false) {
         private var lastDb = 0L
-        private var lastTime = System.currentTimeMillis()
-        private var lastBytes = -1L
+        // Speed is measured over windows of at least a second: updates come every few kilobytes, often
+        // under a millisecond apart, and measuring between those gave wild speeds (and "0s left").
+        private var windowStart = 0L
+        private var windowBytes = -1L
         private var rate = 0L
 
         fun update(done: Long, total: Long) {
             val now = System.currentTimeMillis()
-            if (lastBytes >= 0 && now > lastTime) {
-                val instant = (done - lastBytes) * 1000 / (now - lastTime)
-                rate = if (rate == 0L) instant else (rate * 7 + instant) / 8
+            if (windowBytes < 0 || done < windowBytes) {
+                windowStart = now
+                windowBytes = done
+            } else if (now - windowStart >= RATE_WINDOW_MS) {
+                val instant = (done - windowBytes) * 1000 / (now - windowStart)
+                rate = if (rate == 0L) instant else (rate * 3 + instant) / 4
+                windowStart = now
+                windowBytes = done
             }
-            lastBytes = done
-            lastTime = now
             repo.setLive(jobId, LiveProgress(label, done, total, rate, toInternet = toInternet))
             if (now - lastDb > 1000) {
                 lastDb = now
@@ -802,5 +807,7 @@ class BatchRunner(private val app: OpenProApp) {
         private const val TAG = "BatchRunner"
         /** How long to wait for the phone to rejoin its own Wi-Fi after leaving the camera's. */
         private const val INTERNET_WAIT_MS = 45_000L
+        /** The shortest stretch a transfer's speed is measured over. */
+        private const val RATE_WINDOW_MS = 1_000L
     }
 }
