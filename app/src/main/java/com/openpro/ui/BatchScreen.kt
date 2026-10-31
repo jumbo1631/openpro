@@ -59,6 +59,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.border
 import com.openpro.batch.JobAction
 import com.openpro.batch.JobEntity
 import com.openpro.batch.JobState
@@ -233,11 +234,14 @@ private fun StepPipeline(job: JobEntity) {
             val done = job.step == Step.Finished || job.step.ordinal > step.ordinal
             val current = job.step == step && job.isActive
             val failedHere = job.step == step && job.state == JobState.Failed
-            val color = when {
-                failedHere -> MaterialTheme.colorScheme.error
-                done -> MaterialTheme.colorScheme.primary
-                current -> MaterialTheme.colorScheme.tertiary
-                else -> MaterialTheme.colorScheme.outline
+            val blue = MaterialTheme.colorScheme.primary
+            val shape = RoundedCornerShape(4.dp)
+            // Done: filled blue with a tick. Current: outlined in blue. Still to come: plain text.
+            val chip = when {
+                failedHere -> Modifier.background(MaterialTheme.colorScheme.error, shape)
+                done -> Modifier.background(blue, shape)
+                current -> Modifier.background(blue.copy(alpha = 0.16f), shape).border(1.dp, blue, shape)
+                else -> Modifier
             }
             // A chip and the arrow after it wrap together; each chip stays one line high.
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -246,10 +250,12 @@ private fun StepPipeline(job: JobEntity) {
                     style = MaterialTheme.typography.labelSmall,
                     maxLines = 1,
                     softWrap = false,
-                    color = if (done || current || failedHere) Color.Black else MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier
-                        .background(if (done || current || failedHere) color else Color.Transparent, RoundedCornerShape(4.dp))
-                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                    color = when {
+                        done || failedHere -> Color.Black
+                        current -> blue
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    modifier = chip.padding(horizontal = 6.dp, vertical = 2.dp),
                 )
                 if (i < steps.lastIndex) Text("›", style = MaterialTheme.typography.labelSmall)
             }
@@ -407,10 +413,14 @@ internal fun JobProgress(job: JobEntity, live: LiveProgress?) {
             kotlinx.coroutines.delay(1_000)
         }
     }
+    // Internet work (uploading) in the internet colour, as in the connection bar; the rest in blue.
+    val internet = live?.toInternet ?: (job.step == Step.Upload)
+    val bar = if (internet) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary
+    val track = bar.copy(alpha = 0.24f)
     when {
         live != null && live.total <= 0 -> {
-            Text(live.label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
-            LinearProgressIndicator(Modifier.fillMaxWidth())
+            Text(live.label, style = MaterialTheme.typography.bodySmall, color = bar)
+            LinearProgressIndicator(Modifier.fillMaxWidth(), color = bar, trackColor = track)
         }
         live != null -> {
             val fraction = (live.done.toFloat() / live.total).coerceIn(0f, 1f)
@@ -427,12 +437,12 @@ internal fun JobProgress(job: JobEntity, live: LiveProgress?) {
                 "${(w.done * 100 / w.total.coerceAtLeast(1)).toInt()}%"
             }
             Text("${live.label}: $detail", style = MaterialTheme.typography.bodySmall)
-            LinearProgressIndicator(progress = { fraction }, modifier = Modifier.fillMaxWidth())
+            LinearProgressIndicator(progress = { fraction }, modifier = Modifier.fillMaxWidth(), color = bar, trackColor = track)
         }
         job.isActive && job.bytesDone > 0 && job.bytesTotal > 0 -> {
             val fraction = (job.bytesDone.toFloat() / job.bytesTotal).coerceIn(0f, 1f)
             Text("${formatBytes(job.bytesDone)} of ${formatBytes(job.bytesTotal)} so far", style = MaterialTheme.typography.bodySmall)
-            LinearProgressIndicator(progress = { fraction }, modifier = Modifier.fillMaxWidth())
+            LinearProgressIndicator(progress = { fraction }, modifier = Modifier.fillMaxWidth(), color = bar, trackColor = track)
         }
     }
 }
