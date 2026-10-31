@@ -18,6 +18,10 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.Refresh
@@ -29,12 +33,14 @@ import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
@@ -91,7 +97,7 @@ fun GalleryScreen(
     val online = vm.cameraState.collectAsState().value is com.openpro.camera.CameraState.Online
     val index by vm.copyIndex.collectAsState()
     val lengths by vm.durations.known.collectAsState()
-    val media = remember(all, clips, index, options.source, options.camera) { options.filter(all, clips, index) }
+    val media = remember(all, clips, index, options) { options.filter(all, clips, index) }
     androidx.compose.runtime.LaunchedEffect(Unit) { vm.refreshCopies() }
     // Thumbnail quality is a Storage setting; null shows placeholders and fetches nothing.
     val quality by vm.storage.thumbQuality.collectAsState()
@@ -107,7 +113,8 @@ fun GalleryScreen(
     val longPress: (CameraMedia) -> Unit = { item -> vm.toggleSelected(item.id) }
 
     Screen(
-        if (selecting) "${selection.size} selected" else "Media",
+        // How many the filters let through: "Media (1,079)".
+        if (selecting) "${selection.size} selected" else "Media (${java.text.NumberFormat.getIntegerInstance().format(media.size)})",
         onBack = if (selecting) ({ vm.clearSelection() }) else onBack,
         actions = {
             if (selecting) {
@@ -127,7 +134,7 @@ fun GalleryScreen(
     ) { padding ->
         Column(Modifier.padding(padding).fillMaxSize()) {
         BatchPausedBanner(vm)
-        if (!selecting) SourceFilters(vm, options, clips)
+        if (!selecting) SourceFilters(vm, options, clips, all)
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when {
                 loading && all.isEmpty() -> GallerySkeleton(options)
@@ -207,13 +214,21 @@ private fun BatchPausedBanner(vm: AppViewModel) {
 }
 
 /**
- * Which clips to show: All, or those on a camera (as last listed), on this phone, or on a server.
- * With clips from more than one camera, a camera picker too.
+ * Which clips to show: the active filters as chips (tap one to change filters, ✕ to remove it),
+ * and a Filter chip that opens [FilterDialog]. With clips from more than one camera, a camera
+ * picker too.
  */
 @Composable
-private fun SourceFilters(vm: AppViewModel, options: GalleryOptions, clips: Map<String, com.openpro.copies.ClipEntity>) {
+private fun SourceFilters(vm: AppViewModel, options: GalleryOptions, clips: Map<String, com.openpro.copies.ClipEntity>, all: List<CameraMedia>) {
     val serials = remember(clips) { clips.values.mapNotNull { it.cameraSerial }.distinct() }
     var picking by remember { mutableStateOf(false) }
+    var editing by remember { mutableStateOf(false) }
+    fun setFilters(change: (List<ClipFilter>) -> List<ClipFilter>) = vm.galleryOptions.update { it.copy(filters = change(it.filters)) }
+    // The size slider runs from the smallest clip to the largest.
+    val sizes = remember(all) {
+        all.map { it.sizeBytes }.filter { it > 0 }.takeIf { it.size > 1 }?.let { s -> s.min()..s.max() }?.takeIf { it.first < it.last }
+    }
+    if (editing) FilterDialog(options, sizes, onChange = { change -> vm.galleryOptions.update(change) }, onDismiss = { editing = false })
     Row(
         Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -241,12 +256,163 @@ private fun SourceFilters(vm: AppViewModel, options: GalleryOptions, clips: Map<
                 }
             }
         }
-        Source.entries.forEach { source ->
+        androidx.compose.material3.AssistChip(
+            onClick = { editing = true },
+            label = { Text("Filter") },
+            leadingIcon = { Icon(Icons.Filled.FilterList, null, Modifier.size(18.dp)) },
+        )
+        options.filters.forEach { filter ->
             FilterChip(
-                selected = options.source == source,
-                onClick = { vm.galleryOptions.update { it.copy(source = source) } },
-                label = { Text(source.label) },
+                selected = true,
+                onClick = { editing = true },
+                label = { Text(filter.label) },
+                leadingIcon = if (filter.facet.isFormat) null else {
+                    { Icon(if (filter.negated) Icons.Filled.Block else Icons.Filled.Check, null, Modifier.size(18.dp)) }
+                },
+                trailingIcon = {
+                    Icon(
+                        Icons.Filled.Close, "Remove filter",
+                        Modifier.size(18.dp).clip(androidx.compose.foundation.shape.CircleShape)
+                            .clickable { setFilters { list -> list - filter } },
+                    )
+                },
             )
+        }
+        if (options.sizeFiltered) {
+            FilterChip(
+                selected = true,
+                onClick = { editing = true },
+                label = { Text(sizeLabel(options.minSize, options.maxSize)) },
+                trailingIcon = {
+                    Icon(
+                        Icons.Filled.Close, "Remove filter",
+                        Modifier.size(18.dp).clip(androidx.compose.foundation.shape.CircleShape)
+                            .clickable { vm.galleryOptions.update { it.copy(minSize = null, maxSize = null) } },
+                    )
+                },
+            )
+        }
+    }
+}
+
+/** "100 MB – 2.1 GB", "Over 100 MB", "Under 2.1 GB" or "Any size". */
+private fun sizeLabel(min: Long?, max: Long?) = when {
+    min != null && max != null -> "${formatBytes(min)} – ${formatBytes(max)}"
+    min != null -> "Over ${formatBytes(min)}"
+    max != null -> "Under ${formatBytes(max)}"
+    else -> "Any size"
+}
+
+/**
+ * A slider position (0..1) as a size between [bounds], and back. The scale is logarithmic: sizes
+ * run from kilobyte photos to multi-gigabyte clips, and a straight scale would crowd everything
+ * small into the first sliver.
+ */
+private fun sizeAt(t: Float, bounds: LongRange): Long {
+    val lo = kotlin.math.ln(bounds.first.toDouble())
+    val hi = kotlin.math.ln(bounds.last.toDouble())
+    return kotlin.math.exp(lo + (hi - lo) * t).toLong().coerceIn(bounds)
+}
+
+private fun positionOf(bytes: Long, bounds: LongRange): Float {
+    val lo = kotlin.math.ln(bounds.first.toDouble())
+    val hi = kotlin.math.ln(bounds.last.toDouble())
+    return ((kotlin.math.ln(bytes.coerceIn(bounds).toDouble()) - lo) / (hi - lo)).toFloat().coerceIn(0f, 1f)
+}
+
+/**
+ * The gallery's filters, grouped: the type (all, video or photo), where the clip is (on the camera,
+ * this phone, a server: any, yes or no for each), whether it has been stabilized, and its file size
+ * (a range within [sizes], the smallest and largest there are). Changes apply as they're made.
+ */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun FilterDialog(
+    options: GalleryOptions, sizes: LongRange?, onChange: ((GalleryOptions) -> GalleryOptions) -> Unit, onDismiss: () -> Unit,
+) {
+    val filters = options.filters
+    fun state(facet: Facet): Boolean? = filters.firstOrNull { it.facet == facet }?.let { !it.negated }
+    fun onChange(next: List<ClipFilter>) = onChange { it.copy(filters = next) }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Filter") },
+        confirmButton = { androidx.compose.material3.TextButton(onClick = onDismiss) { Text("Done") } },
+        dismissButton = {
+            androidx.compose.material3.TextButton(
+                onClick = { onChange { it.copy(filters = emptyList(), minSize = null, maxSize = null) } },
+                enabled = filters.isNotEmpty() || options.sizeFiltered,
+            ) { Text("Clear all") }
+        },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterHeading("Type")
+                val format = filters.firstOrNull { it.facet.isFormat }?.facet
+                Segments(listOf("All", "Video", "Photo"), listOf(null, Facet.Video, Facet.Photo).indexOf(format)) { i ->
+                    onChange(if (i == 0) filters.filterNot { it.facet.isFormat } else withFacet(filters, if (i == 1) Facet.Video else Facet.Photo, true))
+                }
+                FilterHeading("Where it is")
+                FacetRow("On the camera", state(Facet.Camera)) { onChange(withFacet(filters, Facet.Camera, it)) }
+                FacetRow("On this phone", state(Facet.Phone)) { onChange(withFacet(filters, Facet.Phone, it)) }
+                FacetRow("On a server", state(Facet.Server)) { onChange(withFacet(filters, Facet.Server, it)) }
+                FilterHeading("Stabilization")
+                FacetRow("Stabilized", state(Facet.Stabilized)) { onChange(withFacet(filters, Facet.Stabilized, it)) }
+                if (sizes != null) SizeRange(options.minSize, options.maxSize, sizes) { min, max -> onChange { it.copy(minSize = min, maxSize = max) } }
+            }
+        },
+    )
+}
+
+/**
+ * File size, as a slider with a thumb for each end. A thumb at its end of the track means no bound
+ * that side. The label follows the drag; the filter changes when the thumb is let go.
+ */
+@Composable
+private fun SizeRange(min: Long?, max: Long?, bounds: LongRange, onChange: (Long?, Long?) -> Unit) {
+    var range by remember(min, max, bounds) {
+        mutableStateOf((min?.let { positionOf(it, bounds) } ?: 0f)..(max?.let { positionOf(it, bounds) } ?: 1f))
+    }
+    val low = sizeAt(range.start, bounds).takeIf { range.start > 0f }
+    val high = sizeAt(range.endInclusive, bounds).takeIf { range.endInclusive < 1f }
+    FilterHeading("File size")
+    Text(sizeLabel(low, high), style = MaterialTheme.typography.bodyMedium)
+    androidx.compose.material3.RangeSlider(
+        value = range,
+        onValueChange = { range = it },
+        onValueChangeFinished = { onChange(low, high) },
+    )
+}
+
+@Composable
+private fun FilterHeading(text: String) {
+    Text(
+        text, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(top = 8.dp),
+    )
+}
+
+/** A label, and Any / Yes / No for whether clips should have it ([state] null, true, false). */
+@Composable
+private fun FacetRow(label: String, state: Boolean?, onChange: (Boolean?) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(label, Modifier.weight(1f).padding(end = 16.dp), style = MaterialTheme.typography.bodyMedium)
+        Box(Modifier.width(180.dp)) {
+            Segments(listOf("Any", "Yes", "No"), listOf(null, true, false).indexOf(state)) { i -> onChange(listOf(null, true, false)[i]) }
+        }
+    }
+}
+
+/** A row of joined buttons, one of which is chosen. */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun Segments(labels: List<String>, selected: Int, onSelect: (Int) -> Unit) {
+    androidx.compose.material3.SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+        labels.forEachIndexed { i, label ->
+            SegmentedButton(
+                selected = i == selected,
+                onClick = { onSelect(i) },
+                shape = androidx.compose.material3.SegmentedButtonDefaults.itemShape(i, labels.size),
+                icon = {},
+            ) { Text(label, maxLines = 1) }
         }
     }
 }

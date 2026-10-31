@@ -38,11 +38,39 @@ enum class TileField(val label: String) {
 /** How the gallery is broken into sections ("shelves") when sorted by date. */
 enum class Grouping(val label: String) { None("None"), Day("Day"), Month("Month") }
 
-/** Which clips the gallery shows, by where they are. */
-enum class Source(val label: String) { All("All"), Camera("On camera"), Phone("On this phone"), Server("On a server") }
+/**
+ * Something a clip can be filtered on: its format, where it is, or whether it has been stabilized.
+ * Format is a choice of one (Video or Photo); the others can also be negated ([off]).
+ */
+enum class Facet(val on: String, val off: String?) {
+    Video("Video", null),
+    Photo("Photo", null),
+    Camera("On camera", "Not on camera"),
+    Phone("On this phone", "Not on this phone"),
+    Server("On a server", "Not on a server"),
+    Stabilized("Stabilized", "Not stabilized"),
+    ;
+
+    val isFormat get() = this == Video || this == Photo
+}
+
+/** One gallery filter: clips with [facet], or, when [negated], clips without it. */
+data class ClipFilter(val facet: Facet, val negated: Boolean = false) {
+    val label get() = if (negated) facet.off ?: facet.on else facet.on
+}
+
+/** [filters] with [facet] set to [state]: true (has it), false (hasn't), or null (either). Video and Photo replace each other. */
+fun withFacet(filters: List<ClipFilter>, facet: Facet, state: Boolean?): List<ClipFilter> {
+    val rest = filters.filter { it.facet != facet && !(facet.isFormat && it.facet.isFormat) }
+    return if (state == null) rest else rest + ClipFilter(facet, negated = !state)
+}
 
 data class GalleryOptions(
-    val source: Source = Source.All,
+    /** Filters stacked in the order they were added; a clip must pass every one. Empty shows everything. */
+    val filters: List<ClipFilter> = emptyList(),
+    /** File size bounds in bytes, inclusive; null for no bound. */
+    val minSize: Long? = null,
+    val maxSize: Long? = null,
     /** Only clips from this camera (serial number); null for every camera. */
     val camera: String? = null,
     val sort: SortOrder = SortOrder.NewestFirst,
@@ -54,17 +82,26 @@ data class GalleryOptions(
 ) {
     val canShelve get() = sort == SortOrder.NewestFirst || sort == SortOrder.OldestFirst
 
-    /** The clips [source] and [camera] let through, given where each is ([clips], [copies]). */
+    val sizeFiltered get() = minSize != null || maxSize != null
+
+    /** The clips [filters], the size bounds and [camera] let through, given where each is ([clips], [copies]). */
     fun filter(
         media: List<CameraMedia>, clips: Map<String, com.openpro.copies.ClipEntity>, copies: Map<String, List<com.openpro.copies.CopyEntity>>,
     ): List<CameraMedia> = media.filter { m ->
         val clip = clips[m.id]
         val saved = copies[m.id].orEmpty()
-        (camera == null || clip?.cameraSerial == camera) && when (source) {
-            Source.All -> true
-            Source.Camera -> clip?.onCamera == true
-            Source.Phone -> saved.any { it.isLocal }
-            Source.Server -> saved.any { it.place == com.openpro.copies.CopyPlace.Server }
+        (camera == null || clip?.cameraSerial == camera) &&
+            (minSize == null || m.sizeBytes >= minSize) && (maxSize == null || m.sizeBytes <= maxSize) &&
+            filters.all { f ->
+            val has = when (f.facet) {
+                Facet.Video -> m.isVideo
+                Facet.Photo -> !m.isVideo
+                Facet.Camera -> clip?.onCamera == true
+                Facet.Phone -> saved.any { it.isLocal }
+                Facet.Server -> saved.any { it.place == com.openpro.copies.CopyPlace.Server }
+                Facet.Stabilized -> saved.any { it.version is com.openpro.media.ClipVersion.Stabilized }
+            }
+            has != f.negated
         }
     }
 
@@ -100,7 +137,10 @@ class GalleryOptionsStore(context: Context) {
         val next = transform(_options.value)
         _options.value = next
         prefs.edit()
-            .putString("source", next.source.name)
+            .putString("filters", next.filters.joinToString(",") { (if (it.negated) "-" else "") + it.facet.name })
+            .remove("source")
+            .putLong("minSize", next.minSize ?: -1)
+            .putLong("maxSize", next.maxSize ?: -1)
             .putString("camera", next.camera)
             .putString("sort", next.sort.name)
             .putString("layout", next.layout.name)
@@ -114,7 +154,9 @@ class GalleryOptionsStore(context: Context) {
     private fun load(): GalleryOptions {
         val defaults = GalleryOptions()
         return GalleryOptions(
-            source = enumOr(prefs.getString("source", null), defaults.source),
+            filters = loadFilters(),
+            minSize = prefs.getLong("minSize", -1).takeIf { it >= 0 },
+            maxSize = prefs.getLong("maxSize", -1).takeIf { it >= 0 },
             camera = prefs.getString("camera", null),
             sort = enumOr(prefs.getString("sort", null), defaults.sort),
             layout = enumOr(prefs.getString("layout", null), defaults.layout),
@@ -127,6 +169,16 @@ class GalleryOptionsStore(context: Context) {
             grouping = prefs.getString("grouping", null)?.let { enumOr(it, defaults.grouping) }
                 ?: if (prefs.getBoolean("shelveByMonth", true)) Grouping.Month else Grouping.None,
         )
+    }
+
+    /** "Camera,-Phone" (a minus for "not"); saved before filters stacked, the one "source" choice becomes one filter. */
+    private fun loadFilters(): List<ClipFilter> {
+        val saved = prefs.getString("filters", null)
+            ?: return listOfNotNull(Facet.entries.firstOrNull { it.name == prefs.getString("source", null) }?.let(::ClipFilter))
+        return saved.split(",").filter { it.isNotBlank() }.mapNotNull { token ->
+            val negated = token.startsWith("-")
+            Facet.entries.firstOrNull { it.name == token.removePrefix("-") }?.let { ClipFilter(it, negated) }
+        }
     }
 
     /** Field choices saved before Duration existed get it, and lose preview size, once (the new defaults). */
