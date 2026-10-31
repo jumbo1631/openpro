@@ -709,8 +709,8 @@ class BatchRunner(private val app: OpenProApp) {
             val watcher = launch {
                 app.quik.progress.collect { all ->
                     all[quikJob.id]?.let { p ->
-                        // Where it reads from, then what the engine is doing ("Rendering … · 820 MB written").
-                        // Past 100% it's finishing the file: a moving bar, with the size still growing.
+                        // Where it reads from, then what the engine is doing ("Rendering 3840×2160").
+                        // Past 100% it's finishing the file: a moving bar.
                         val label = if (p.message.isEmpty()) source else "$source · ${p.message}"
                         val finishing = p.progress >= 0.999f
                         repo.setLive(job.id, LiveProgress(label, if (finishing) 0 else (p.progress * 1000).toLong(), if (finishing) 0 else 1000, isBytes = false))

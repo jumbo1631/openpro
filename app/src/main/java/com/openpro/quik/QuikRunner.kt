@@ -2,7 +2,6 @@ package com.openpro.quik
 
 import android.content.Context
 import android.util.Log
-import com.openpro.ui.formatBytes
 import com.gopro.quikengine.Exporter
 import com.gopro.quikengine.OutputProjection
 import com.gopro.quikengine.QuikEngine
@@ -287,7 +286,7 @@ class QuikRunner(private val context: Context) {
 
             override fun onProgress(progress: Float) {
                 if (progress >= 0.999f) rendered.set(true)
-                report(progress, "Rendering ${s.width}×${s.height} · ${formatBytes(file.length())} written")
+                report(progress, "Rendering ${s.width}×${s.height}")
             }
 
             override fun onSuccess(filename: String) = latch.countDown()
@@ -300,9 +299,10 @@ class QuikRunner(private val context: Context) {
                 if (cancelled()) exporter.cancel()
                 if (rendered.get()) {
                     val size = file.length()
+                    // Still growing: worth a report, which also tells the watchdog it hasn't hung.
                     if (size != lastSize) {
                         lastSize = size
-                        report(1f, "Finishing the stabilized file · ${formatBytes(size)} written")
+                        report(1f, "Finishing the stabilized file…")
                     }
                 }
             }
