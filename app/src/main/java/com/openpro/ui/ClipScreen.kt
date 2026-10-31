@@ -326,6 +326,7 @@ private fun Copies(
     playing: String?, cameraPlayable: Boolean, onPlay: (String) -> Unit,
 ) {
     var deleting by remember { mutableStateOf<ClipCopy?>(null) }
+    val context = LocalContext.current
     val camera = vm.cameraCopy(media)
     val all = if (clip?.onCamera != false) listOf(camera) + copies else copies
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -368,13 +369,15 @@ private fun Copies(
                 is ClipCopy.Place.Server -> Icons.Filled.CloudDone
             }
             val indexed = (c.ref as? ClipCopy.Ref.Indexed)?.copy
-            val saved = indexed?.takeIf { media.isVideo && it.isLocal }
+            val local = indexed?.takeIf { it.isLocal }
+            val saved = local?.takeIf { media.isVideo }
             val onServer = c.place is ClipCopy.Place.Server
             val title = if (media.isVideo) c.version.label else "Photo"
             CopyRow(
                 // The place alone ("Phone gallery", the server's name); its folder is in the details.
                 icon, title, c.where.substringBefore(" · "), c.sizeBytes, onDelete = c.ref?.let { { deleting = c } },
                 playing = saved?.let { playing == it.id }, onPlay = { saved?.let { onPlay(it.id) } },
+                onOpen = local?.let { copy -> { openWith(context, copy) } },
                 details = listOfNotNull(
                     "Version" to title,
                     "Where" to c.where,
@@ -400,12 +403,14 @@ private fun Copies(
 /**
  * One copy: its version and size, and where in a word. [playing] (null: it can't be played) shows a
  * play button, filled while the player shows this copy; an info button shows [details] (paths, exact
- * size, dates); [onDelete] (if it can be deleted) a small bin button at the end.
+ * size, dates), with [onOpen] (a copy on the phone) offering to open it in another app; [onDelete]
+ * (if it can be deleted) a small bin button at the end.
  */
 @Composable
 private fun CopyRow(
     icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, where: String, size: Long?, onDelete: (() -> Unit)?,
-    playing: Boolean? = null, onPlay: () -> Unit = {}, deleteDisabled: String? = null, details: List<Pair<String, String>>,
+    playing: Boolean? = null, onPlay: () -> Unit = {}, deleteDisabled: String? = null, onOpen: (() -> Unit)? = null,
+    details: List<Pair<String, String>>,
 ) {
     var showDetails by remember { mutableStateOf(false) }
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -438,15 +443,19 @@ private fun CopyRow(
             }
         }
     }
-    if (showDetails) CopyDetails(title, details) { showDetails = false }
+    if (showDetails) CopyDetails(title, details, onOpen) { showDetails = false }
 }
 
-/** A copy's details, one per line: a label, and a value that can be selected and copied (paths, checksums). */
+/**
+ * A copy's details, one per line: a label, and a value that can be selected and copied (paths,
+ * checksums). With [onOpen], an "Open with…" button too.
+ */
 @Composable
-private fun CopyDetails(title: String, details: List<Pair<String, String>>, onDismiss: () -> Unit) {
+private fun CopyDetails(title: String, details: List<Pair<String, String>>, onOpen: (() -> Unit)?, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        dismissButton = onOpen?.let { open -> { TextButton(onClick = { open(); onDismiss() }) { Text("Open with…") } } },
         title = { Text(title) },
         text = {
             androidx.compose.foundation.text.selection.SelectionContainer {
@@ -461,6 +470,21 @@ private fun CopyDetails(title: String, details: List<Pair<String, String>>, onDi
             }
         },
     )
+}
+
+/**
+ * Hands a copy saved on the phone (in the gallery or a picked folder) to another app the user
+ * chooses (a player, an editor, a file manager), with read access to that one file.
+ */
+private fun openWith(context: android.content.Context, copy: com.openpro.copies.CopyEntity) {
+    val view = android.content.Intent(android.content.Intent.ACTION_VIEW)
+        .setDataAndType(android.net.Uri.parse(copy.location), ClipNames.mimeType(copy.fileName))
+        .addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    try {
+        context.startActivity(android.content.Intent.createChooser(view, "Open with"))
+    } catch (e: android.content.ActivityNotFoundException) {
+        android.widget.Toast.makeText(context, "No app here can open it", android.widget.Toast.LENGTH_SHORT).show()
+    }
 }
 
 /** "1.2 GB (1,234,567,890 bytes)". */
