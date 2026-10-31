@@ -91,14 +91,16 @@ fun ServersScreen(vm: AppViewModel, onEdit: (String?) -> Unit, onBack: () -> Uni
                             RadioButton(selected = defaultId == s.id || servers.size == 1, onClick = { vm.servers.setDefault(s.id) })
                             Column(Modifier.weight(1f)) {
                                 Text(s.name, style = MaterialTheme.typography.titleMedium)
+                                // A padlock just before the address: open and red for http://, closed and green for https://.
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text("${s.type.label} · ${s.baseUrl}", style = MaterialTheme.typography.bodySmall)
-                                    if (s.isCleartext) {
-                                        Icon(
-                                            Icons.Filled.LockOpen, "Unencrypted (http://)",
-                                            Modifier.padding(start = 4.dp).size(14.dp), tint = MaterialTheme.colorScheme.error,
-                                        )
-                                    }
+                                    Text("${s.type.label} · ", style = MaterialTheme.typography.bodySmall)
+                                    Icon(
+                                        if (s.isCleartext) Icons.Filled.LockOpen else Icons.Filled.Lock,
+                                        if (s.isCleartext) "Unencrypted (http://)" else "Encrypted (https://)",
+                                        Modifier.padding(end = 2.dp).size(14.dp),
+                                        tint = if (s.isCleartext) MaterialTheme.colorScheme.error else androidx.compose.ui.graphics.Color(0xFF43A047),
+                                    )
+                                    Text(s.baseUrl, style = MaterialTheme.typography.bodySmall)
                                 }
                                 Text("Uploads to ${listOf(s.folder.trimEnd('/'), s.layout).filter { it.isNotEmpty() }.joinToString("/")}/ as ${s.username}", style = MaterialTheme.typography.bodySmall)
                             }
